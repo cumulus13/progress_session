@@ -1,0 +1,10 @@
+include README.md
+include LICENSE
+include requirements.txt
+exclude __version__.py
+include progress_session/__version__.py
+recursive-include progress_session *.py
+global-exclude *.pyc
+global-exclude __pycache__
+global-exclude .DS_Store
+global-exclude *.log
