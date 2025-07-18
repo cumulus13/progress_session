@@ -8,7 +8,7 @@ import traceback
 import os
 
 class ProgressSession(requests.Session):
-    def request(self, method, url, *args, max_try=3, text="Connecting", theme='fruity', full_exception=False, retry_delay=1, **kwargs):
+    def request(self, method, url, *args, max_try=3, text="Connecting", theme='fruity', full_exception=False, retry_delay=1, show_url = False, **kwargs):
         attempt = 0
         last_exception = None
         exception = None
@@ -50,7 +50,7 @@ class ProgressSession(requests.Session):
                         dot_index = (dot_index + 1) % len(dot_cycle)
                         progress.update(
                             task,
-                            description=f"[yellow]Attempt[/] [#AA55FF]{attempt}[/]/[#0055FF]{max_try}[/]: [#FFFF00]{method.upper()}[/] [#FF5500]{url}[/] [#00FFFF]{dots}[/]"
+                            description=f"[yellow]Attempt[/] [#AA55FF]{attempt}[/]/[#0055FF]{max_try}[/]: [#FFFF00]{method.upper()}[/] [#FF5500]{url if show_url else ''}[/] [#00FFFF]{dots}[/]"
                         )
                         time.sleep(0.2)  # lebih halus dan continue
 
@@ -63,11 +63,11 @@ class ProgressSession(requests.Session):
                 except requests.RequestException as e:
                     last_exception = e
                     exception = traceback.format_exc()
-                    progress.update(task, description=f"[red]Attempt [/][#AA55FF]{attempt}[/]/[#0055FF]{max_try}[/]: [#FFFF00]{method.upper()}[/] [#FF5500]{url}[/] [#00FFFF]{dots}[/] [#FF007F]Failed[/]")
+                    progress.update(task, description=f"[red]Attempt [/][#AA55FF]{attempt}[/]/[#0055FF]{max_try}[/]: [#FFFF00]{method.upper()}[/] [#FF5500]{url if show_url else ''}[/] [#00FFFF]{dots}[/] [#FF007F]Failed[/]")
                     if attempt < max_try:
                         time.sleep(retry_delay)
 
-            progress.update(task, description=f"[red]Attempt [/][white on red]{max_try}[/]: [#FFFF00]{method.upper()}[/] [#FF5500]{url}[/] [#00FFFF]{dots}[/] [#FF007F]Failed[/]")
+            progress.update(task, description=f"[red]Attempt [/][white on red]{max_try}[/]: [#FFFF00]{method.upper()}[/] [#FF5500]{url if show_url else ''}[/] [#00FFFF]{dots}[/] [#FF007F]Failed[/]")
             if (os.getenv('TRACEBACK') in ['1', 'true', 'True'] or full_exception) and exception:
                 tb = Syntax(exception, 'python', line_numbers=False, theme=theme)
                 console.print(tb)
