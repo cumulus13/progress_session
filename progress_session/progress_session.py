@@ -14,6 +14,7 @@ class ProgressSession(requests.Session):
         exception = None
         dot_cycle = ['.', '..', '...']
         dot_index = 0
+        show_url = show_url or True if os.getenv('SHOW_URL', '0') in ['1', 'true', 'True'] else False
 
         with Progress(
             SpinnerColumn(),
