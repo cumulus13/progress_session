@@ -95,14 +95,21 @@ class ProgressSession(requests.Session):
                     return response
 
                 except requests.RequestException as e:
-                    last_exception = e
-                    exception = traceback.format_exc()
+                    show_url = show_url or False
+                    err_str = str(e)
+                    if not show_url:
+                        err_str = re.sub(r'https?://[^\s]+', '[hidden-url]', err_str)
+                        err_str = re.sub(r'([a-zA-Z0-9\-]+\.)+[a-zA-Z]{2,}(:\d+)?(/[^\s]*)?', '[hidden-url]', err_str)
+                        # Create a new Exception with a message already masking
+                        e = type(e)(err_str).with_traceback(e.__traceback__)
+                    exception = ''.join(traceback.format_exception(type(e), e, e.__traceback__))
                     progress.update(task, description=f"[red]Attempt [/][#AA55FF]{attempt}[/]/[#0055FF]{max_try}[/]: [#FFFF00]{method.upper()}[/] [#FF5500]{url if show_url else ''}[/] [#00FFFF]{dots}[/] [#FF007F]Failed[/]")
                     if attempt < max_try:
                         time.sleep(retry_delay)
 
             progress.update(task, description=f"[red]Attempt [/][white on red]{max_try}[/]: [#FFFF00]{method.upper()}[/] [#FF5500]{url if show_url else ''}[/] [#00FFFF]{dots}[/] [#FF007F]Failed[/]")
             if (os.getenv('TRACEBACK') in ['1', 'true', 'True'] or full_exception) and exception:
+                err_str = str(last_exception)
                 tb = Syntax(exception, 'python', line_numbers=False, theme=theme)
                 console.print(tb)
             else:
@@ -115,6 +122,7 @@ class ProgressSession(requests.Session):
                     tb = Syntax(err_str, 'python', line_numbers=False, theme=theme)
                     console.print(f"[red bold]ERROR:[/] {err_str}")
                 else:
+                    err_str = str(last_exception)
                     tb = Syntax(str(last_exception), 'python', line_numbers=False, theme=theme)
                     console.print(f"[red bold]ERROR:[/] {last_exception}")
             
