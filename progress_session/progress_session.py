@@ -19,7 +19,20 @@ import threading
 import re
 
 class ProgressSession(requests.Session):
+    def __init__(self, base_url: str = None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.base_url = base_url
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+        
     def request(self, method, url, *args, max_try=3, text="Connecting", theme='fruity', full_exception=False, retry_delay=1, show_url = False, **kwargs):
+        # Combine base_url if the url is relative
+        if self.base_url and not url.startswith("http"):
+            url = self.base_url.rstrip("/") + "/" + url.lstrip("/")
         attempt = 0
         last_exception = None
         exception = None
@@ -108,11 +121,20 @@ class ProgressSession(requests.Session):
             raise type(last_exception)(err_str).with_traceback(last_exception.__traceback__)
 
 
-# ✅ Contoh pakai
+# ✅ Examples of use
 if __name__ == "__main__":
     session = ProgressSession()
     try:
-        response = session.get("https://154.26.137.28", timeout=60, max_try=3)
+        response = session.get("https://154.26.137.28", timeout=10, max_try=3)
         print("Status:", response.status_code)
     except Exception as e:
         print("Final failure:", e)
+    
+    # How to Context Manager
+    with ProgressSession("https://154.26.137.28") as session:
+        try:
+            response = session.get("/get", timeout=10, max_try=3)
+            print("Status:", response.status_code)
+        except Exception as e:
+            print("Final failure:", e)
+
