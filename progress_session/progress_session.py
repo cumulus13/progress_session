@@ -94,7 +94,7 @@ class ProgressSession(requests.Session):
                     response.raise_for_status()
                     return response
 
-                except requests.RequestException as e:
+                except Exception as e:
                     show_url = show_url or False
                     err_str = str(e)
                     if not show_url:
@@ -103,6 +103,7 @@ class ProgressSession(requests.Session):
                         # Create a new Exception with a message already masking
                         e = type(e)(err_str).with_traceback(e.__traceback__)
                     exception = ''.join(traceback.format_exception(type(e), e, e.__traceback__))
+                    last_exception = e
                     progress.update(task, description=f"[red]Attempt [/][#AA55FF]{attempt}[/]/[#0055FF]{max_try}[/]: [#FFFF00]{method.upper()}[/] [#FF5500]{url if show_url else ''}[/] [#00FFFF]{dots}[/] [#FF007F]Failed[/]")
                     if attempt < max_try:
                         time.sleep(retry_delay)
@@ -126,7 +127,10 @@ class ProgressSession(requests.Session):
                     tb = Syntax(str(last_exception), 'python', line_numbers=False, theme=theme)
                     console.print(f"[red bold]ERROR:[/] {last_exception}")
             
-            raise type(last_exception)(err_str).with_traceback(last_exception.__traceback__)
+            if last_exception:
+                raise type(last_exception)(err_str).with_traceback(last_exception.__traceback__)
+            else:
+                raise RuntimeError("Unknown error in ProgressSession (no exception captured)")
 
 
 # ✅ Examples of use
