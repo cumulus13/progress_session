@@ -35,6 +35,8 @@ class ProgressSession(requests.Session):
         text = self.text or text
         if self.base_url and not url.startswith("http"):
             url = self.base_url.rstrip("/") + "/" + url.lstrip("/")
+        else:
+            url = self.base_url or url
         attempt = 0
         last_exception = None
         exception = None
