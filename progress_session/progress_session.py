@@ -19,9 +19,10 @@ import threading
 import re
 
 class ProgressSession(requests.Session):
-    def __init__(self, base_url: str = None, *args, **kwargs):
+    def __init__(self, base_url: str = None, text: str = "Connecting", *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.base_url = base_url
+        self.text = text
 
     def __enter__(self):
         return self
@@ -31,6 +32,7 @@ class ProgressSession(requests.Session):
         
     def request(self, method, url, *args, max_try=3, text="Connecting", theme='fruity', full_exception=False, retry_delay=1, show_url = False, **kwargs):
         # Combine base_url if the url is relative
+        text = self.text or text
         if self.base_url and not url.startswith("http"):
             url = self.base_url.rstrip("/") + "/" + url.lstrip("/")
         attempt = 0
