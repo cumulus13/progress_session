@@ -7,7 +7,7 @@
 # SPDX-FileCopyrightText: 2025 cumulus13 <cumulus13@gmail.com>
 
 from __future__ import annotations
-from typing import Optional, Any, Set
+from typing import Optional, Any, Set, Union
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.console import Console
 import requests
@@ -33,7 +33,36 @@ from urllib.parse import urljoin, urlparse
 import socket
 
 console = Console()
-logger = logging.getLogger(__name__)
+
+if str(os.getenv('DEBUG', '0')).lower() in ['1', 'true', 'yes', 'ok']:
+    print("🐞 Debug mode enabled")
+    os.environ["DEBUG"] = "1"
+    os.environ['LOGGING'] = "1"
+    os.environ.pop('NO_LOGGING', None)
+    os.environ['TRACEBACK'] = "1"
+    os.environ["LOGGING"] = "1"
+else:
+    os.environ['NO_LOGGING'] = "1"
+
+try:
+    from richcolorlog import setup_logging  # type: ignore
+    logger_level = os.getenv('LOG_LEVEL', 'DEBUG').upper()
+    logger = setup_logging('progress_session', level=logger_level)
+except:
+    import logging
+
+    logger_level = getattr(logging, os.getenv('LOG_LEVEL', 'DEBUG').upper(), logging.CRITICAL)
+
+    try:
+        from .custom_logging import get_logger  # type: ignore
+    except ImportError:
+        from custom_logging import get_logger  # type: ignore
+    
+    try:
+        logger = get_logger('progress_session', level=logger_level)
+    except Exception as e:
+        logger = logging.getLogger(__name__)
+        logger.setLevel(logger_level)
 
 
 class ProgressSession(requests.Session):
@@ -84,7 +113,7 @@ class ProgressSession(requests.Session):
         599,  # Network Connect Timeout Error
     }
     
-    # Error types yang TIDAK boleh di-retry (permanent errors)
+    # Error types that cannot be retried (permanent errors)
     NON_RETRYABLE_ERRORS: Set[type] = {
         TooManyRedirects,
         ValueError,
@@ -99,12 +128,14 @@ class ProgressSession(requests.Session):
         pool_connections: int = 10,
         pool_maxsize: int = 10,
         max_retries_adapter: int = 0,
+        disable: bool = False,
         *args, 
         **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.base_url = base_url
         self.default_text = default_text
+        self.disable = disable
         
         # Determine show_url: explicit param > env var > False
         if show_url is not None:
@@ -112,7 +143,7 @@ class ProgressSession(requests.Session):
         else:
             self._show_url = os.getenv('SHOW_URL', '0').lower() in ['1', 'true']
         
-        # Setup connection pooling dengan adapter
+        # Setup connection pooling with adapter
         from requests.adapters import HTTPAdapter
         adapter = HTTPAdapter(
             pool_connections=pool_connections,
@@ -134,10 +165,13 @@ class ProgressSession(requests.Session):
     def __enter__(self):
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
-        logger.debug("ProgressSession closed and connections cleaned up")
-    
+    def __exit__(self, exc_type, exc_val, exc_tb):  # type: ignore
+        try:
+            self.close()
+            logger.debug("ProgressSession closed and connections cleaned up")
+        except Exception as e:
+            logger.error(f"Error while closing ProgressSession: {e}")
+
     def _should_retry(self, exception: Exception, status_code: Optional[int] = None) -> tuple[bool, str]:
         """
         Intelligent decision: apakah error ini harus di-retry atau tidak.
@@ -297,8 +331,9 @@ class ProgressSession(requests.Session):
         max_retry_delay: float = 60.0,
         retry_jitter: bool = True,
         cleanup_on_retry: bool = True,
+        disable: bool = False,
         **kwargs
-    ) -> requests.Response:
+    ) -> Optional[Union[requests.Response, RequestException]]:
         """
         Make HTTP request with progress display and intelligent retry logic.
         
@@ -322,6 +357,8 @@ class ProgressSession(requests.Session):
         Raises:
             Exception: Last exception if all retries fail or non-retryable error
         """
+
+        self.disable = self.disable or disable
         # Build final URL
         try:
             full_url = self._build_url(url)
@@ -334,7 +371,7 @@ class ProgressSession(requests.Session):
         
         # Determine if we should show traceback
         if show_traceback is None:
-            show_traceback = os.getenv('TRACEBACK', '0').lower() in ['1', 'true']
+            show_traceback = str(os.getenv('TRACEBACK', '0')).lower() in ['1', 'true']
         
         # Display URL (masked if needed)
         display_url = self._mask_url(full_url) if not self._show_url else full_url
@@ -355,7 +392,8 @@ class ProgressSession(requests.Session):
             TextColumn("[progress.description]{task.description}"),
             console=console,
             transient=True,
-            refresh_per_second=12
+            refresh_per_second=12,
+            disable=self.disable
         ) as progress:
             task = progress.add_task(f"[yellow]{display_text}[/]", total=None)
             
@@ -368,11 +406,11 @@ class ProgressSession(requests.Session):
                 
                 def do_request():
                     try:
-                        response_holder['response'] = super(ProgressSession, self).request(
+                        response_holder['response'] = super(ProgressSession, self).request(  # type: ignore
                             method, full_url, *args, **kwargs
                         )
                     except Exception as e:
-                        response_holder['exception'] = e
+                        response_holder['exception'] = e  # type: ignore
                     finally:
                         done_event.set()
                 
@@ -403,6 +441,7 @@ class ProgressSession(requests.Session):
                     logger.error("Request thread did not finish in time!")
                 
                 # Check results
+                logger.warning(f"response_holder: {response_holder}")
                 if response_holder['exception']:
                     last_exception = response_holder['exception']
                     error_msg = self._format_exception_message(last_exception)
@@ -431,6 +470,9 @@ class ProgressSession(requests.Session):
                     if not should_retry:
                         logger.error(f"Non-retryable error detected: {retry_reason}")
                         break
+                
+                    logger.debug(f"attempt [1]: {attempt}")
+                    logger.debug(f"max_try [1]: {max_try}")
                     
                     if attempt >= max_try:
                         logger.error(f"Max retries ({max_try}) reached")
@@ -456,23 +498,32 @@ class ProgressSession(requests.Session):
                 
                 # Success case - check HTTP status
                 response = response_holder['response']
+                logger.debug(f"attempt [2]: {attempt}")
+                logger.debug(f"max_try [2]: {max_try}")
                 try:
-                    response.raise_for_status()
+                    try:
+                        response.raise_for_status()  # type: ignore
+                    except Exception as e:
+                        if attempt >= max_try:
+                            if str(os.getenv('TRACEBACK', '0')).lower() in ['1', 'true', 'ok', 'yes']:
+                                console.print_exception(width=os.get_terminal_size()[0])
+                            # return requests.Response()  # type: ignore
+                            return RequestException(f"Final attempt failed: {e}")  # type: ignore
                     progress.update(
                         task,
                         description=(
                             f"[green]Success[/]: "
                             f"[#FFFF00]{method.upper()}[/] "
                             f"[#FF5500]{display_url}[/] "
-                            f"[#00FF00]✓[/] [{response.status_code}]"
+                            f"[#00FF00]✓[/] [{response.status_code if response else 404}]"
                         )
                     )
-                    logger.info(f"Request successful: {method} {display_url} - {response.status_code}")
+                    logger.info(f"Request successful: {method} {display_url} - {response.status_code if response else 'No Response'}")
                     return response
                     
                 except HTTPError as e:
                     last_exception = e
-                    status_code = response.status_code
+                    status_code = response.status_code  # type: ignore
                     error_msg = self._format_exception_message(e)
                     
                     # Decide if we should retry based on status code
