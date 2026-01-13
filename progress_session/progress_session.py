@@ -26,6 +26,7 @@ import time
 from rich.syntax import Syntax
 import traceback
 import os
+import sys
 import threading
 import re
 import logging
@@ -34,35 +35,50 @@ import socket
 
 console = Console()
 
-if str(os.getenv('DEBUG', '0')).lower() in ['1', 'true', 'yes', 'ok']:
-    print("🐞 Debug mode enabled")
+LOG_LEVEL = 1000
+SHOW_LOG = False
+if (len(sys.argv) > 1 and any('--debug' == arg for arg in sys.argv[1:])) or str(os.getenv('PPROGRESS_SESSION_DEBUG', os.getenv('DEBUG', False))).lower() in ['1', 'true', 'ok', 'on', 'yes']:
+    print("🐞 Debug mode enabled [progress_session]")
     os.environ["DEBUG"] = "1"
     os.environ['LOGGING'] = "1"
     os.environ.pop('NO_LOGGING', None)
     os.environ['TRACEBACK'] = "1"
-    os.environ["LOGGING"] = "1"
-else:
-    os.environ['NO_LOGGING'] = "1"
+    SHOW_LOG = True
+    LOG_LEVEL="DEBUG"
+# else:
+#     os.environ['NO_LOGGING'] = "1"
+#     os.environ.pop('LOGGING', None)
+
+print(f"LOG_LEVEL: {LOG_LEVEL}")
+print(f"SHOW_LOG: {SHOW_LOG}")
+print(f"os.getenv('DEBUG'): {os.getenv('DEBUG', '0')}")
+print(f"os.getenv('LOGGING'): {os.getenv('LOGGING', '0')}")
+print(f"os.getenv('NO_LOGGING'): {os.getenv('NO_LOGGING', '0')}")
 
 try:
     from richcolorlog import setup_logging  # type: ignore
-    logger_level = os.getenv('LOG_LEVEL', 'DEBUG').upper()
-    logger = setup_logging('progress_session', level=logger_level)
+    logger = setup_logging('progress_session', level=LOG_LEVEL, show = SHOW_LOG)
 except:
     import logging
 
-    logger_level = getattr(logging, os.getenv('LOG_LEVEL', 'DEBUG').upper(), logging.CRITICAL)
-
+    LOG_LEVEL = getattr(logging, os.getenv('LOG_LEVEL', "1000").upper(), 1000)
+    
     try:
         from .custom_logging import get_logger  # type: ignore
     except ImportError:
         from custom_logging import get_logger  # type: ignore
     
     try:
-        logger = get_logger('progress_session', level=logger_level)
+        logger = get_logger('progress_session', level=LOG_LEVEL)
     except Exception as e:
         logger = logging.getLogger(__name__)
-        logger.setLevel(logger_level)
+        logger.setLevel(LOG_LEVEL)
+
+print(f"LOG_LEVEL: {LOG_LEVEL}")
+print(f"SHOW_LOG: {SHOW_LOG}")
+print(f"os.getenv('DEBUG'): {os.getenv('DEBUG', '0')}")
+print(f"os.getenv('LOGGING'): {os.getenv('LOGGING', '0')}")
+print(f"os.getenv('NO_LOGGING'): {os.getenv('NO_LOGGING', '0')}")
 
 
 class ProgressSession(requests.Session):
@@ -158,8 +174,7 @@ class ProgressSession(requests.Session):
         self.keep_alive = True
         
         logger.info(
-            f"ProgressSession initialized: pool_connections={pool_connections}, "
-            f"pool_maxsize={pool_maxsize}"
+            f"ProgressSession initialized: pool_connections={pool_connections}, pool_maxsize={pool_maxsize}"
         )
 
     def __enter__(self):
