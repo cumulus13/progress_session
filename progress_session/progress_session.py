@@ -35,8 +35,10 @@ import socket
 
 console = Console()
 
-LOG_LEVEL = 1000
+LOG_LEVEL = "CRITICAL"
 SHOW_LOG = False
+logger = None
+
 if (len(sys.argv) > 1 and any('--debug' == arg for arg in sys.argv[1:])) or str(os.getenv('PPROGRESS_SESSION_DEBUG', os.getenv('DEBUG', False))).lower() in ['1', 'true', 'ok', 'on', 'yes']:
     print("🐞 Debug mode enabled [progress_session]")
     os.environ["DEBUG"] = "1"
@@ -45,23 +47,41 @@ if (len(sys.argv) > 1 and any('--debug' == arg for arg in sys.argv[1:])) or str(
     os.environ['TRACEBACK'] = "1"
     SHOW_LOG = True
     LOG_LEVEL="DEBUG"
-# else:
-#     os.environ['NO_LOGGING'] = "1"
-#     os.environ.pop('LOGGING', None)
 
-print(f"LOG_LEVEL: {LOG_LEVEL}")
-print(f"SHOW_LOG: {SHOW_LOG}")
-print(f"os.getenv('DEBUG'): {os.getenv('DEBUG', '0')}")
-print(f"os.getenv('LOGGING'): {os.getenv('LOGGING', '0')}")
-print(f"os.getenv('NO_LOGGING'): {os.getenv('NO_LOGGING', '0')}")
+    print(f"LOG_LEVEL: {LOG_LEVEL}")
+    print(f"SHOW_LOG: {SHOW_LOG}")
+    print(f"os.getenv('DEBUG'): {os.getenv('DEBUG', '0')}")
+    print(f"os.getenv('LOGGING'): {os.getenv('LOGGING', '0')}")
+    print(f"os.getenv('NO_LOGGING'): {os.getenv('NO_LOGGING', '0')}")
 
-try:
-    from richcolorlog import setup_logging  # type: ignore
-    logger = setup_logging('progress_session', level=LOG_LEVEL, show = SHOW_LOG)
-except:
+    try:
+        from richcolorlog import setup_logging  # type: ignore
+        logger = setup_logging('progress_session', level=LOG_LEVEL, show = SHOW_LOG)
+    except:
+        import logging
+
+        LOG_LEVEL = getattr(logging, os.getenv('LOG_LEVEL', LOG_LEVEL).upper(), 1000)
+        
+        try:
+            from .custom_logging import get_logger  # type: ignore
+        except ImportError:
+            from custom_logging import get_logger  # type: ignore
+        
+        try:
+            logger = get_logger('progress_session', level=LOG_LEVEL)
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.setLevel(LOG_LEVEL)
+
+    print(f"LOG_LEVEL: {LOG_LEVEL}")
+    print(f"SHOW_LOG: {SHOW_LOG}")
+    print(f"os.getenv('DEBUG'): {os.getenv('DEBUG', '0')}")
+    print(f"os.getenv('LOGGING'): {os.getenv('LOGGING', '0')}")
+    print(f"os.getenv('NO_LOGGING'): {os.getenv('NO_LOGGING', '0')}")
+else:
     import logging
 
-    LOG_LEVEL = getattr(logging, os.getenv('LOG_LEVEL', "1000").upper(), 1000)
+    LOG_LEVEL = getattr(logging, os.getenv('LOG_LEVEL', LOG_LEVEL).upper(), 1000)
     
     try:
         from .custom_logging import get_logger  # type: ignore
@@ -73,13 +93,6 @@ except:
     except Exception as e:
         logger = logging.getLogger(__name__)
         logger.setLevel(LOG_LEVEL)
-
-print(f"LOG_LEVEL: {LOG_LEVEL}")
-print(f"SHOW_LOG: {SHOW_LOG}")
-print(f"os.getenv('DEBUG'): {os.getenv('DEBUG', '0')}")
-print(f"os.getenv('LOGGING'): {os.getenv('LOGGING', '0')}")
-print(f"os.getenv('NO_LOGGING'): {os.getenv('NO_LOGGING', '0')}")
-
 
 class ProgressSession(requests.Session):
     """
