@@ -29,17 +29,25 @@ import os
 import sys
 import threading
 import re
-import logging
 from urllib.parse import urljoin, urlparse
 import socket
 
 console = Console()
 
-LOG_LEVEL = "CRITICAL"
+APP_NAME = "ProgressSession"
+LOG_LEVEL = os.getenv(f"{APP_NAME}_LOG_LEVEL", "CRITICAL")
 SHOW_LOG = False
 logger = None
 
-if (len(sys.argv) > 1 and any('--debug' == arg for arg in sys.argv[1:])) or str(os.getenv('PPROGRESS_SESSION_DEBUG', os.getenv('DEBUG', False))).lower() in ['1', 'true', 'ok', 'on', 'yes']:
+def is_debug():
+    if len(sys.argv) > 1 and any('--debug' == arg for arg in sys.argv[1:]):
+        return True
+    elif str(os.getenv('PPROGRESS_SESSION_DEBUG', os.getenv('DEBUG','0'))).lower() in ('1', 'true', 'ok', 'on', 'yes'):
+        return True
+
+    return False
+
+if is_debug():
     print("🐞 Debug mode enabled [progress_session]")
     os.environ["DEBUG"] = "1"
     os.environ['LOGGING'] = "1"
@@ -48,51 +56,36 @@ if (len(sys.argv) > 1 and any('--debug' == arg for arg in sys.argv[1:])) or str(
     SHOW_LOG = True
     LOG_LEVEL="DEBUG"
 
-    print(f"LOG_LEVEL: {LOG_LEVEL}")
-    print(f"SHOW_LOG: {SHOW_LOG}")
-    print(f"os.getenv('DEBUG'): {os.getenv('DEBUG', '0')}")
-    print(f"os.getenv('LOGGING'): {os.getenv('LOGGING', '0')}")
-    print(f"os.getenv('NO_LOGGING'): {os.getenv('NO_LOGGING', '0')}")
+    # print(f"LOG_LEVEL: {LOG_LEVEL}")
+    # print(f"SHOW_LOG: {SHOW_LOG}")
+    # print(f"os.getenv('DEBUG'): {os.getenv('DEBUG', '0')}")
+    # print(f"os.getenv('LOGGING'): {os.getenv('LOGGING', '0')}")
+    # print(f"os.getenv('NO_LOGGING'): {os.getenv('NO_LOGGING', '0')}")
 
     try:
         from richcolorlog import setup_logging  # type: ignore
         logger = setup_logging('progress_session', level=LOG_LEVEL, show = SHOW_LOG)
     except:
-        import logging
-
-        LOG_LEVEL = getattr(logging, os.getenv('LOG_LEVEL', LOG_LEVEL).upper(), 1000)
+        pass
         
-        try:
-            from .custom_logging import get_logger  # type: ignore
-        except ImportError:
-            from custom_logging import get_logger  # type: ignore
-        
-        try:
-            logger = get_logger('progress_session', level=LOG_LEVEL)
-        except Exception as e:
-            logger = logging.getLogger(__name__)
-            logger.setLevel(LOG_LEVEL)
-
-    print(f"LOG_LEVEL: {LOG_LEVEL}")
-    print(f"SHOW_LOG: {SHOW_LOG}")
-    print(f"os.getenv('DEBUG'): {os.getenv('DEBUG', '0')}")
-    print(f"os.getenv('LOGGING'): {os.getenv('LOGGING', '0')}")
-    print(f"os.getenv('NO_LOGGING'): {os.getenv('NO_LOGGING', '0')}")
-else:
+if not logger:
     import logging
 
-    LOG_LEVEL = getattr(logging, os.getenv('LOG_LEVEL', LOG_LEVEL).upper(), 1000)
+    _LOG_LEVEL = getattr(logging, LOG_LEVEL.upper(), 1000)
+
+    # print(f"os.getenv('LOG_LEVEL', LOG_LEVEL): {os.getenv('LOG_LEVEL', LOG_LEVEL)}")
+    # print(f"LOG_LEVEL: {LOG_LEVEL}")
     
     try:
-        from .custom_logging import get_logger  # type: ignore
+        from .custom_logging import get_logger
     except ImportError:
         from custom_logging import get_logger  # type: ignore
     
     try:
-        logger = get_logger('progress_session', level=LOG_LEVEL)
+        logger = get_logger('progress_session', level=_LOG_LEVEL)
     except Exception as e:
         logger = logging.getLogger(__name__)
-        logger.setLevel(LOG_LEVEL)
+        logger.setLevel(_LOG_LEVEL)
 
 class ProgressSession(requests.Session):
     """
@@ -466,12 +459,13 @@ class ProgressSession(requests.Session):
                 
                 # Check if thread is still alive (shouldn't happen)
                 if req_thread.is_alive():
-                    logger.error("Request thread did not finish in time!")
+                    logger.error("Request thread did not finish in time!")  # type: ignore
                 
                 # Check results
-                logger.warning(f"response_holder: {response_holder}")
-                if response_holder['exception']:
-                    last_exception = response_holder['exception']
+                # print(f"LEVEL_NAME: {logger.level_name}")  # type: ignore
+                logger.warning(f"response_holder: {response_holder}")  # type: ignore
+                last_exception = response_holder.get('exception', None)
+                if last_exception:
                     error_msg = self._format_exception_message(last_exception)
                     
                     # Decide if we should retry this error
@@ -488,15 +482,15 @@ class ProgressSession(requests.Session):
                         )
                     )
                     
-                    logger.warning(
+                    logger.warning(  # type: ignore
                         f"Request failed (attempt {attempt}/{max_try}): "
                         f"{type(last_exception).__name__}: {error_msg[:100]}"
                     )
-                    logger.debug(f"Retry decision: {retry_reason}")
+                    logger.debug(f"Retry decision: {retry_reason}")  # type: ignore
                     
                     # If non-retryable or last attempt, fail immediately
                     if not should_retry:
-                        logger.error(f"Non-retryable error detected: {retry_reason}")
+                        logger.error(f"Non-retryable error detected: {retry_reason}")  # type: ignore
                         break
                 
                     logger.debug(f"attempt [1]: {attempt}")
